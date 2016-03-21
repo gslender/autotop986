@@ -1,0 +1,13 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	],
+  "settings":
+  {
+    "board": "arduino:avr:nano:cpu=atmega328",
+    "port": "/dev/tty.wchusbserialff110",
+  }
+}
