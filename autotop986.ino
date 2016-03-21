@@ -13,27 +13,35 @@
   14.4sec to close
 */
 
+
+// pin definitions
 #define openBtnOut     2
 #define closeBtnOut    3
 #define pBrakeOut      4
 #define openBtnIn      8
 #define closeBtnIn     9
 
+// cutoff point, after which a press is considered a long press
 #define shortPressInterval 250
+// loop delay
 #define loopInterval 50
 
+// time taken to open top
 #define openTime 15600
+// time taken to close top
 #define closeTime 16400
 
+// operation modes
 #define modeNull 0
 #define modeAutoOpen 1
 #define modeAutoClose 2
 #define modeManualOpen 3
 #define modeManualClose 4
 
-int movementCount = 0;
-int openBtnCount = 0;
 int closeBtnCount = 0;
+int openBtnCount = 0;
+int movementCount = 0;
+
 int openMode = modeNull;
 bool btnReleased = false;
 bool ignoreBtn = false;
@@ -62,31 +70,43 @@ void initPins() {
 }
 
 void checkButtons() {
-
-  //check buttons
   if(digitalRead(openBtnIn) == HIGH) {
-    if(btnReleased){
-      allStop();
-      ignoreBtn = true;
-    } else if(ignoreBtn == false) {
-      if(openBtnCount < 32000) {
-        openBtnCount += loopInterval;
-      }
-      closeBtnCount = 0;
-      digitalWrite(closeBtnOut, LOW);
-    }
+    handleOpenButtonPressed();
   } else if(digitalRead(closeBtnIn) == HIGH) {
-    if(btnReleased){
-      allStop();
-      ignoreBtn = true;
-    } else if(ignoreBtn == false) {
-      if(closeBtnCount < 32000) {
-        closeBtnCount += loopInterval;
-      }
-      openBtnCount = 0;
-      digitalWrite(openBtnOut, LOW);
+    handleCloseButtonPressed();
+  } else {
+    handleNoButtonPressed();
+  }
+}
+
+void handleOpenButtonPressed() {
+  if(btnReleased){
+    allStop();
+    ignoreBtn = true;
+  } else if(ignoreBtn == false) {
+    if(openBtnCount < 32000) {
+      openBtnCount += loopInterval;
     }
-  } else if (openMode != modeAutoOpen && openMode != modeAutoClose) {
+    closeBtnCount = 0;
+    digitalWrite(closeBtnOut, LOW);
+  }
+}
+
+void handleCloseButtonPressed() {
+  if(btnReleased){
+    allStop();
+    ignoreBtn = true;
+  } else if(ignoreBtn == false) {
+    if(closeBtnCount < 32000) {
+      closeBtnCount += loopInterval;
+    }
+    openBtnCount = 0;
+    digitalWrite(openBtnOut, LOW);
+  }
+}
+
+void handleNoButtonPressed() {
+  if (openMode != modeAutoOpen && openMode != modeAutoClose) {
     allStop();
     ignoreBtn = false;
   } else {
@@ -143,22 +163,30 @@ void updateMode() {
 
     default: //no movement currently
       if(openBtnCount > 0) {
-        openMode = modeManualOpen;
-        movementCount = openTime;
-        digitalWrite(pBrakeOut, HIGH);
-        digitalWrite(closeBtnOut, LOW);
-        digitalWrite(openBtnOut, HIGH);
+        startAutoOpen();
       } else if(closeBtnCount > 0) {
-        openMode = modeManualClose;
-        movementCount = closeTime;
-        digitalWrite(pBrakeOut, HIGH);
-        digitalWrite(openBtnOut, LOW);
-        digitalWrite(closeBtnOut, HIGH);
+        startAutoClose();
       } else {
         allStop();
       }
       break;
   }
+}
+
+void startAutoOpen() {
+  openMode = modeManualOpen;
+  movementCount = openTime;
+  digitalWrite(pBrakeOut, HIGH);
+  digitalWrite(closeBtnOut, LOW);
+  digitalWrite(openBtnOut, HIGH);
+}
+
+void startAutoClose() {
+  openMode = modeManualClose;
+  movementCount = closeTime;
+  digitalWrite(pBrakeOut, HIGH);
+  digitalWrite(openBtnOut, LOW);
+  digitalWrite(closeBtnOut, HIGH);
 }
 
 void allStop() {
