@@ -6,8 +6,9 @@
   This auto-presses the open or close buttons for the convertible top on a Porsche 986
   for the specified open/close seconds automatically if you quickly tap the button.
 
-  If the button tap is longer (eg it is held down), the button reacts like normal
-  and is only auto-pressed for the same amount of time as the user is pressing.
+  If the button tap is longer (eg it is held down), the button goes into manual mode and reacts like normal,
+  i.e. is only auto-pressed for the same amount of time as the user is pressing.
+  Once engaged, manual mode remains active until no input has been received for a defined amount of time.
 
   If the top is already automatically opening or closing, a second press of either
   button cancels the auto-open proceedure.
@@ -31,6 +32,9 @@
 // time taken to close top
 #define closeTime 16400
 
+// time to lock in manual mode once engaged
+#define manualModeLockTime 1000
+
 // operation modes
 #define modeWait 0
 #define modeAutoOpen 1
@@ -39,7 +43,8 @@
 #define modeManualClose 4
 #define modeHalt 5
 
-unsigned long ms, motorStartTime;
+unsigned long ms, motorStartTime, manualModeReleaseTime;
+bool outputRequired = false;
 
 int currentMode = modeWait;
 int previousMode = modeWait;
@@ -95,6 +100,8 @@ void pollInput() {
 
 void updateMode() {
 
+  previousMode = currentMode;
+
   switch (currentMode) {
 
     case modeWait:
@@ -117,17 +124,28 @@ void updateMode() {
       break;
   }
 
+  outputRequired = currentMode != previousMode;
 }
 
 void updateModeWait() {
   log("updateModeWait");
   if (openButtonIn.on()) {
-    currentMode = modeAutoOpen;
-    motorStartTime = millis();
+    //if in manual lock
+    if (ms - manualModeReleaseTime < manualModeLockTime) {
+      currentMode = modeManualOpen;
+    } else {
+      currentMode = modeAutoOpen;
+      motorStartTime = millis();
+    }
   }
   if (closeButtonIn.on()) {
-    currentMode = modeAutoClose;
-    motorStartTime = millis();
+    //if in manual lock
+    if (ms - manualModeReleaseTime < manualModeLockTime) {
+      currentMode = modeManualClose;
+    } else {
+      currentMode = modeAutoClose;
+      motorStartTime = millis();
+    }
   }
 }
 
@@ -173,6 +191,7 @@ void updateModeManualOpen() {
   //wait on button release
   if (!openButtonIn.on()) {
     currentMode = modeWait;
+    manualModeReleaseTime = millis();
   }
 }
 
@@ -181,6 +200,7 @@ void updateModeManualClose() {
   //wait on button release
   if (!closeButtonIn.on()) {
     currentMode = modeWait;
+    manualModeReleaseTime = millis();
   }
 }
 
@@ -195,7 +215,7 @@ void updateModeHalt() {
 /** Output Functions */
 
 void sendOutput() {
-  if (currentMode != previousMode) {
+  if (outputRequired) {
     log("mode changed");
     Serial.println(currentMode);
 
@@ -207,8 +227,6 @@ void sendOutput() {
       sendStop();
     }
   }
-
-  previousMode = currentMode;
 }
 
 void sendOpen() {
