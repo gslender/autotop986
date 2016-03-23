@@ -45,6 +45,9 @@
 
 unsigned long ms, motorStartTime, manualModeReleaseTime;
 bool outputRequired = false;
+bool manualModeLocked = false;
+bool openTimeComplete = false;
+bool closeTimeComplete = false;
 
 int currentMode = modeWait;
 int previousMode = modeWait;
@@ -67,6 +70,7 @@ void loop() {
   ms = millis();
 
   pollInput();
+  updateTimers();
   updateMode();
   sendOutput();
 
@@ -94,6 +98,14 @@ void pollInput() {
   openButtonIn.poll();
   closeButtonIn.poll();
 
+}
+
+/** Timer Functions */
+
+void updateTimers() {
+  manualModeLocked = (ms - manualModeReleaseTime < manualModeLockTime);
+  openTimeComplete = (ms - motorStartTime > openTime);
+  closeTimeComplete = (ms - motorStartTime > closeTime);
 }
 
 /** Mode Update Functions */
@@ -129,22 +141,19 @@ void updateMode() {
 
 void updateModeWait() {
   log("updateModeWait");
-  if (openButtonIn.on()) {
-    //if in manual lock
-    if (ms - manualModeReleaseTime < manualModeLockTime) {
+  if (manualModeLocked) {
+    //react to buttons locked in manual mode
+    if (openButtonIn.on()) {
       currentMode = modeManualOpen;
-    } else {
-      currentMode = modeAutoOpen;
-      motorStartTime = millis();
-    }
-  }
-  if (closeButtonIn.on()) {
-    //if in manual lock
-    if (ms - manualModeReleaseTime < manualModeLockTime) {
+    } else if (closeButtonIn.on()) {
       currentMode = modeManualClose;
-    } else {
+    }
+  } else {
+    //react to buttons in auto mode
+    if (openButtonIn.on()) {
+      currentMode = modeAutoOpen;
+    } else if (closeButtonIn.on()) {
       currentMode = modeAutoClose;
-      motorStartTime = millis();
     }
   }
 }
@@ -157,7 +166,7 @@ void updateModeAutoOpen() {
     return;
   }
   //wait on timer
-  if (ms - motorStartTime > openTime) {
+  if (openTimeComplete) {
     currentMode = modeWait;
     return;
   }
@@ -175,7 +184,7 @@ void updateModeAutoClose() {
     currentMode = modeHalt;
   }
   //wait on timer
-  if (ms - motorStartTime > closeTime) {
+  if (closeTimeComplete) {
     currentMode = modeWait;
     return;
   }
@@ -234,6 +243,7 @@ void sendOpen() {
   digitalWrite(pinOpenBtnOut, HIGH);
   digitalWrite(pinCloseBtnOut, LOW);
   digitalWrite(pinParkingBrakeOut, HIGH);
+  motorStartTime = millis();
 }
 
 void sendClose() {
@@ -241,8 +251,8 @@ void sendClose() {
   digitalWrite(pinOpenBtnOut, LOW);
   digitalWrite(pinCloseBtnOut, HIGH);
   digitalWrite(pinParkingBrakeOut, HIGH);
+  motorStartTime = millis();
 }
-
 
 void sendStop() {
   log("send : stop!");
