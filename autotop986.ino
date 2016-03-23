@@ -18,14 +18,9 @@
 #include "Switch.h"
 #include "SimpleTimer.h"
 
-// pin definitions
-#define pinOpenBtnOut       2
-#define pinCloseBtnOut      3
-#define pinParkingBrakeOut  4
-#define pinOpenBtnIn        8
-#define pinCloseBtnIn       9
+// Start editable settings //
 
-#define loopInterval 50
+// Edit these to your own liking...
 
 // time taken to open top
 #define openTime 15600
@@ -35,6 +30,15 @@
 // time to lock in manual mode once engaged
 #define manualModeLockTime 1000
 
+// pin definitions
+#define pinOpenBtnOut       2
+#define pinCloseBtnOut      3
+#define pinParkingBrakeOut  4
+#define pinOpenBtnIn        8
+#define pinCloseBtnIn       9
+
+// End editable settings //
+
 // operation modes
 #define modeWait 0
 #define modeAutoOpen 1
@@ -43,7 +47,7 @@
 #define modeManualClose 4
 #define modeHalt 5
 
-unsigned long ms, motorStartTime, manualModeReleaseTime;
+unsigned long ms, motorStartTime, manualModeLastMoveTime;
 bool outputRequired = false;
 bool manualModeLocked = false;
 bool openTimeComplete = false;
@@ -59,7 +63,7 @@ Switch closeButtonIn = Switch(pinCloseBtnIn);//,INPUT, HIGH);
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("setup");
+  log("setup");
 
   initInputPins();
   initOutputPins();
@@ -73,8 +77,6 @@ void loop() {
   updateTimers();
   updateMode();
   sendOutput();
-
-  //delay(loopInterval);
 }
 
 
@@ -103,7 +105,7 @@ void pollInput() {
 /** Timer Functions */
 
 void updateTimers() {
-  manualModeLocked = (ms - manualModeReleaseTime < manualModeLockTime);
+  manualModeLocked = (ms - manualModeLastMoveTime < manualModeLockTime);
   openTimeComplete = (ms - motorStartTime > openTime);
   closeTimeComplete = (ms - motorStartTime > closeTime);
 }
@@ -142,19 +144,29 @@ void updateMode() {
 void updateModeWait() {
   log("updateModeWait");
   if (manualModeLocked) {
-    //react to buttons locked in manual mode
-    if (openButtonIn.on()) {
-      currentMode = modeManualOpen;
-    } else if (closeButtonIn.on()) {
-      currentMode = modeManualClose;
-    }
+    updateModeWaitManual();
   } else {
-    //react to buttons in auto mode
-    if (openButtonIn.on()) {
-      currentMode = modeAutoOpen;
-    } else if (closeButtonIn.on()) {
-      currentMode = modeAutoClose;
-    }
+    updateModeWaitAuto();
+  }
+}
+
+void updateModeWaitManual() {
+  log("updateModeWaitManual");
+  //react to buttons while locked in manual mode
+  if (openButtonIn.on()) {
+    currentMode = modeManualOpen;
+  } else if (closeButtonIn.on()) {
+    currentMode = modeManualClose;
+  }
+}
+
+void updateModeWaitAuto() {
+  log("updateModeWaitAuto");
+  //react to buttons in auto mode
+  if (openButtonIn.on()) {
+    currentMode = modeAutoOpen;
+  } else if (closeButtonIn.on()) {
+    currentMode = modeAutoClose;
   }
 }
 
@@ -200,7 +212,7 @@ void updateModeManualOpen() {
   //wait on button release
   if (!openButtonIn.on()) {
     currentMode = modeWait;
-    manualModeReleaseTime = millis();
+    manualModeLastMoveTime = millis();
   }
 }
 
@@ -209,7 +221,7 @@ void updateModeManualClose() {
   //wait on button release
   if (!closeButtonIn.on()) {
     currentMode = modeWait;
-    manualModeReleaseTime = millis();
+    manualModeLastMoveTime = millis();
   }
 }
 
@@ -225,8 +237,7 @@ void updateModeHalt() {
 
 void sendOutput() {
   if (outputRequired) {
-    log("mode changed");
-    Serial.println(currentMode);
+    log("mode changed " + String(currentMode));
 
     if (currentMode == modeAutoOpen || currentMode == modeManualOpen) {
       sendOpen();
